@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Processing — {{ report.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="processing-page">
+    <div class="processing-card">
+        <!-- Animated Brain/Pulse -->
+        <div class="processing-animation">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+            <div class="radar-center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+            </div>
+        </div>
+
+        <h1 class="processing-title">Analyzing Report</h1>
+        <p class="processing-filename">{{ report.original_filename }}</p>
+
+        <div class="processing-steps" id="processingSteps">
+            <div class="step-item" id="step-load">
+                <div class="step-dot step-dot--active"></div>
+                <span>Loading & parsing file</span>
+            </div>
+            <div class="step-item" id="step-preprocess">
+                <div class="step-dot"></div>
+                <span>Preprocessing & cleaning</span>
+            </div>
+            <div class="step-item" id="step-numerical">
+                <div class="step-dot"></div>
+                <span>Running Isolation Forest (numerical)</span>
+            </div>
+            <div class="step-item" id="step-text">
+                <div class="step-dot"></div>
+                <span>Text anomaly scoring (SVD Autoencoder)</span>
+            </div>
+            <div class="step-item" id="step-aggregate">
+                <div class="step-dot"></div>
+                <span>Aggregating results & saving</span>
+            </div>
+        </div>
+
+        <div class="processing-status-msg" id="statusMsg">Please wait...</div>
+
+        <div class="processing-error" id="errorBox" style="display:none;">
+            <p id="errorMsg"></p>
+            <a href="/" class="btn btn-primary">Try Again</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const reportId = {{ report.id }};
+    let pollInterval;
+    let stepIndex = 0;
+    const steps = ['step-load', 'step-preprocess', 'step-numerical', 'step-text', 'step-aggregate'];
+    const stepMessages = [
+        'Loading & parsing your file...',
+        'Cleaning and preprocessing data...',
+        'Running Isolation Forest algorithm...',
+        'Computing text anomaly scores...',
+        'Finalizing and storing results...'
+    ];
+
+    function advanceStep() {
+        if (stepIndex < steps.length) {
+            // Mark previous complete
+            if (stepIndex > 0) {
+                const prev = document.getElementById(steps[stepIndex - 1]);
+                prev.querySelector('.step-dot').className = 'step-dot step-dot--done';
+            }
+            const curr = document.getElementById(steps[stepIndex]);
+            curr.querySelector('.step-dot').className = 'step-dot step-dot--active';
+            document.getElementById('statusMsg').textContent = stepMessages[stepIndex];
+            stepIndex++;
+        }
+    }
+
+    // Auto-advance steps visually every 3s
+    advanceStep();
+    const stepTimer = setInterval(() => {
+        if (stepIndex < steps.length) advanceStep();
+        else clearInterval(stepTimer);
+    }, 3000);
+
+    // Poll actual status every 2.5s
+    function poll() {
+        fetch(`/status/{{ report.id }}/`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'done') {
+                    clearInterval(pollInterval);
+                    clearInterval(stepTimer);
+                    // Mark all steps done
+                    steps.forEach(s => {
+                        document.getElementById(s).querySelector('.step-dot').className = 'step-dot step-dot--done';
+                    });
+                    document.getElementById('statusMsg').textContent = '✓ Analysis complete! Redirecting...';
+                    setTimeout(() => { window.location.href = data.redirect; }, 800);
+                } else if (data.status === 'failed') {
+                    clearInterval(pollInterval);
+                    clearInterval(stepTimer);
+                    document.getElementById('processingSteps').style.display = 'none';
+                    document.getElementById('statusMsg').style.display = 'none';
+                    document.getElementById('errorBox').style.display = 'block';
+                    document.getElementById('errorMsg').textContent = data.error || 'An error occurred during processing.';
+                }
+            })
+            .catch(() => { });
+    }
+
+    pollInterval = setInterval(poll, 2500);
+    poll(); // immediate first check
+</script>
+{% endblock %}

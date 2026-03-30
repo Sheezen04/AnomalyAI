@@ -1,0 +1,730 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ report.original_filename }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<style>
+    /* ---- Chart info tooltip ---- */
+    .chart-info {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: help;
+        margin-left: 6px;
+    }
+
+    .chart-info-icon {
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: rgba(148, 163, 184, 0.15);
+        border: 1px solid #334155;
+        color: #64748b;
+        font-size: 10px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        line-height: 1;
+    }
+
+    .chart-info:hover .chart-info-icon {
+        background: rgba(59, 130, 246, 0.2);
+        border-color: #3b82f6;
+        color: #93c5fd;
+    }
+
+    .chart-tooltip {
+        position: absolute;
+        bottom: calc(100% + 10px);
+        right: 0;
+        width: 260px;
+        background: #1e2a3b;
+        border: 1px solid #2d3f55;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 0.78rem;
+        color: #94a3b8;
+        line-height: 1.55;
+        z-index: 999;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 0.2s, transform 0.2s;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        white-space: normal;
+    }
+
+    .chart-info:hover .chart-tooltip {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .chart-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        right: 5px;
+        border: 6px solid transparent;
+        border-top-color: #2d3f55;
+    }
+
+    /* ---- Summary panel ---- */
+    .summary-panel {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .summary-card {
+        background: #111827;
+        border: 1px solid #1f2d40;
+        border-radius: 12px;
+        padding: 16px 18px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .summary-card-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #4b6285;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .summary-card-value {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #e2e8f0;
+        letter-spacing: -0.5px;
+        line-height: 1.2;
+    }
+
+    .summary-card-sub {
+        font-size: 0.72rem;
+        color: #64748b;
+        margin-top: 4px;
+    }
+
+    .summary-card--blue {
+        border-left: 3px solid #3b82f6;
+    }
+
+    .summary-card--red {
+        border-left: 3px solid #ef4444;
+    }
+
+    .summary-card--yellow {
+        border-left: 3px solid #f59e0b;
+    }
+
+    .summary-card--purple {
+        border-left: 3px solid #8b5cf6;
+    }
+
+    .summary-card--cyan {
+        border-left: 3px solid #06b6d4;
+    }
+
+    .summary-card--green {
+        border-left: 3px solid #10b981;
+    }
+
+    .summary-card--orange {
+        border-left: 3px solid #f97316;
+    }
+
+    .summary-section-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #4b6285;
+        margin: 0 0 10px;
+    }
+
+    /* ---- Top Anomaly Table ---- */
+    .top-table-wrap {
+        overflow-x: auto;
+        overflow-y: auto;
+        max-height: 340px;
+        border-radius: 8px;
+    }
+
+    .top-anomaly-tbl {
+        width: 100%;
+        min-width: 600px;
+        border-collapse: collapse;
+        font-size: 0.82rem;
+        table-layout: auto;
+    }
+
+    .top-anomaly-tbl th {
+        background: #0d1424;
+        color: #64748b;
+        font-weight: 600;
+        font-size: 0.73rem;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        padding: 9px 13px;
+        text-align: left;
+        border-bottom: 1px solid #1f2d40;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+
+    .top-anomaly-tbl td {
+        padding: 9px 13px;
+        border-bottom: 1px solid rgba(31, 45, 64, 0.5);
+        color: #e2e8f0;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .top-anomaly-tbl tr:last-child td {
+        border-bottom: none;
+    }
+
+    .top-anomaly-tbl tr:hover td {
+        background: rgba(239, 68, 68, 0.06);
+    }
+
+    .top-anomaly-tbl td.num-col {
+        color: #93c5fd;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .top-anomaly-tbl td.text-col {
+        color: #cbd5e1;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        color: #f87171;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-text">
+        <div class="breadcrumb"><a href="/">Upload</a> &rsaquo; <a
+                href="{% url 'reports:result_table' report.id %}">Results</a> &rsaquo; Dashboard</div>
+        <h1 class="page-title">Anomaly Dashboard</h1>
+        <p class="page-subtitle">{{ report.original_filename }}</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{% url 'reports:result_table' report.id %}" class="btn btn-ghost">← Results Table</a>
+        <a href="{% url 'reports:download' report.id %}" class="btn btn-ghost">Export CSV</a>
+    </div>
+</div>
+
+<!-- ① EXECUTIVE SUMMARY PANEL -->
+<p class="summary-section-title">Executive Summary</p>
+<div class="summary-panel" id="summaryPanel">
+    <!-- Populated from JS after chart data fetch -->
+    <div class="summary-card summary-card--blue">
+        <div class="summary-card-label">Total Records</div>
+        <div class="summary-card-value">{{ summary.total_rows }}</div>
+        <div class="summary-card-sub">Rows analyzed</div>
+    </div>
+    <div class="summary-card summary-card--red">
+        <div class="summary-card-label">Anomalies Found</div>
+        <div class="summary-card-value">{{ summary.anomaly_count }}</div>
+        <div class="summary-card-sub">Flagged records</div>
+    </div>
+    <div class="summary-card summary-card--yellow">
+        <div class="summary-card-label">Anomaly Rate</div>
+        <div class="summary-card-value">{{ summary.anomaly_rate }}%</div>
+        <div class="summary-card-sub">of total dataset</div>
+    </div>
+    <div class="summary-card summary-card--purple">
+        <div class="summary-card-label">Avg Anomaly Score</div>
+        <div class="summary-card-value">{{ summary.avg_anomaly_score|floatformat:3 }}</div>
+        <div class="summary-card-sub">0 = normal · 1 = severe</div>
+    </div>
+    <div class="summary-card summary-card--cyan">
+        <div class="summary-card-label">Algorithm</div>
+        <div class="summary-card-value" style="font-size:0.95rem;" id="summAlgo">{{ summary.algorithm|default:"Isolation
+            Forest" }}</div>
+        <div class="summary-card-sub" id="summTextAlgo">{{ summary.text_algorithm|default:"TF-IDF + SVD" }}</div>
+    </div>
+    <div class="summary-card summary-card--orange">
+        <div class="summary-card-label">Contamination</div>
+        <div class="summary-card-value" id="summContam">{{ summary.contamination|default:"0.1" }}</div>
+        <div class="summary-card-sub">Threshold: {{ summary.threshold|default:"0.5" }}</div>
+    </div>
+    <div class="summary-card summary-card--green">
+        <div class="summary-card-label">Execution Time</div>
+        <div class="summary-card-value" id="summTime">{{ summary.execution_seconds|default:"—" }}s</div>
+        <div class="summary-card-sub">End-to-end pipeline</div>
+    </div>
+</div>
+
+<!-- ② SCATTER: Anomaly Score per Record -->
+<div class="charts-grid">
+    <div class="chart-card chart-card--wide">
+        <div class="chart-header">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <h3>Anomaly Score per Record</h3>
+                <div class="chart-info">
+                    <div class="chart-info-icon">?</div>
+                    <div class="chart-tooltip">
+                        <strong>What this shows:</strong> Each dot is one data record. The vertical axis shows how
+                        anomalous that record is (0 = completely normal, 1 = highly anomalous). Red diamonds above the
+                        dashed threshold line are flagged as anomalies. Use this to quickly spot outlier records and
+                        understand the spread of anomaly scores across your dataset.
+                    </div>
+                </div>
+            </div>
+            <span class="chart-pill">Scatter</span>
+        </div>
+        <div id="chartScatter" class="chart-div"></div>
+    </div>
+
+    <!-- PIE: Distribution -->
+    <div class="chart-card">
+        <div class="chart-header">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <h3>Normal vs Anomaly Distribution</h3>
+                <div class="chart-info">
+                    <div class="chart-info-icon">?</div>
+                    <div class="chart-tooltip">
+                        <strong>What this shows:</strong> The proportion of records classified as Normal (green) versus
+                        Anomalous (red). A large red slice indicates a high contamination level. For most business
+                        datasets, anomalies should represent less than 10–15% of records.
+                    </div>
+                </div>
+            </div>
+            <span class="chart-pill">Donut</span>
+        </div>
+        <div id="chartPie" class="chart-div"></div>
+    </div>
+</div>
+
+<!-- ③ HISTOGRAM + BAR -->
+<div class="charts-grid">
+    <div class="chart-card">
+        <div class="chart-header">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <h3>Anomaly Score Distribution</h3>
+                <div class="chart-info">
+                    <div class="chart-info-icon">?</div>
+                    <div class="chart-tooltip">
+                        <strong>What this shows:</strong> How anomaly scores are distributed across all records. Bars on
+                        the left (scores near 0) represent normal records. Bars on the right (scores near 1) represent
+                        the most anomalous. A healthy dataset shows most records clustered near 0 with a small tail
+                        toward 1.
+                    </div>
+                </div>
+            </div>
+            <span class="chart-pill">Histogram</span>
+        </div>
+        <div id="chartHist" class="chart-div"></div>
+    </div>
+
+    <!-- FEATURE CONTRIBUTION BAR -->
+    <div class="chart-card">
+        <div class="chart-header">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <h3>Feature Contribution to Anomalies</h3>
+                <div class="chart-info">
+                    <div class="chart-info-icon">?</div>
+                    <div class="chart-tooltip">
+                        <strong>What this shows:</strong> For each numerical feature, the chart compares the average
+                        value in anomalous records (red) versus normal records (blue). A large gap between the two bars
+                        indicates that feature strongly differentiates anomalies. Focus attention on features where the
+                        red bar is significantly higher or lower than the blue bar.
+                    </div>
+                </div>
+            </div>
+            <span class="chart-pill">Bar</span>
+        </div>
+        <div id="chartBar" class="chart-div"></div>
+    </div>
+</div>
+
+<!-- ④ HEATMAP + TIMESERIES -->
+<div class="charts-grid">
+    <div class="chart-card chart-card--wide" id="heatmapCard">
+        <div class="chart-header">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <h3>Feature Correlation Heatmap</h3>
+                <div class="chart-info">
+                    <div class="chart-info-icon">?</div>
+                    <div class="chart-tooltip">
+                        <strong>What this shows:</strong> Pairwise correlation between all numerical features. Values
+                        close to +1 (blue) mean two features increase together; values near −1 (red) mean they move in
+                        opposite directions. Cells near 0 (dark) indicate no relationship. Highly correlated features
+                        may amplify each other's anomaly signal.
+                    </div>
+                </div>
+            </div>
+            <span class="chart-pill">Heatmap</span>
+        </div>
+        <div id="chartHeatmap" class="chart-div"></div>
+    </div>
+
+    <div class="chart-card" id="timeseriesCard" style="display:none;">
+        <div class="chart-header">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <h3>Anomaly Score Over Time</h3>
+                <div class="chart-info">
+                    <div class="chart-info-icon">?</div>
+                    <div class="chart-tooltip">
+                        <strong>What this shows:</strong> Anomaly scores plotted along the detected date/time column.
+                        Red markers represent flagged anomalies. Use this chart to identify whether anomalies cluster
+                        around specific time periods — which may indicate systemic issues (e.g., a bad batch, process
+                        change, or seasonal spike).
+                    </div>
+                </div>
+            </div>
+            <span class="chart-pill">Line</span>
+        </div>
+        <div id="chartTimeseries" class="chart-div"></div>
+    </div>
+</div>
+
+<!-- ⑤ TOP ANOMALOUS RECORDS TABLE -->
+<div class="section-card mt-2">
+    <div class="section-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <h2>Top Anomalous Records</h2>
+            <div class="chart-info">
+                <div class="chart-info-icon">?</div>
+                <div class="chart-tooltip" style="bottom:auto;top:calc(100% + 10px);">
+                    <strong>What this shows:</strong> The records with the highest anomaly scores, sorted from most to
+                    least anomalous. Each row is one record from your dataset. The <em>Anomaly Score</em> column shows
+                    the combined numerical + text score (0–1). Review these rows first when investigating suspicious
+                    entries.
+                    <br /><br />
+                    <strong>Tip:</strong> Click "View All" to see the complete anomaly table with filtering and sorting
+                    options.
+                    <div style="position:absolute;top:100%;right:5px;bottom:auto;" class="chart-tooltip::before"></div>
+                </div>
+            </div>
+        </div>
+        <a href="{% url 'reports:result_table' report.id %}" class="btn btn-ghost btn-sm">View All →</a>
+    </div>
+    <div class="top-table-wrap">
+        <table class="top-anomaly-tbl" id="topAnomalyTable">
+            <thead id="topTableHead"></thead>
+            <tbody id="topTableBody"></tbody>
+        </table>
+        <div id="topTableEmpty" style="display:none;padding:32px;text-align:center;color:#4b6285;font-size:0.875rem;">No
+            anomaly records to display.</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // ── Shared Plotly layout defaults ──────────────────────────────────────────
+    const BASE_LAYOUT = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11.5 },
+        legend: { bgcolor: 'rgba(0,0,0,0)', bordercolor: '#334155', borderwidth: 1, font: { color: '#94a3b8' } },
+        hoverlabel: { bgcolor: '#1e2a3b', bordercolor: '#334155', font: { family: 'Inter', color: '#e2e8f0', size: 12 } },
+    };
+
+    const AXIS_STYLE = {
+        tickfont: { color: '#64748b', size: 11 },
+        titlefont: { color: '#94a3b8', size: 12 },
+        gridcolor: '#1a2535',
+        linecolor: '#1f2d40',
+        zerolinecolor: '#1f2d40',
+    };
+
+    const CFG = { responsive: true, displayModeBar: false };
+    const THRESHOLD = 0.5;
+
+    // ── Fetch chart data ───────────────────────────────────────────────────────
+    fetch('/reports/{{ report.id }}/api/chart/')
+        .then(r => r.json())
+        .then(data => {
+            patchSummaryCards(data);
+            renderScatter(data);
+            renderPie(data);
+            renderHistogram(data);
+            renderBar(data);
+            renderHeatmap(data);
+            renderTimeseries(data);
+            renderTopTable(data);
+        });
+
+    // ── ① Patch summary cards with live data ──────────────────────────────────
+    function patchSummaryCards(data) {
+        const setIfEl = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.textContent = val; };
+        setIfEl('summAlgo', data.algorithm || 'Isolation Forest');
+        setIfEl('summTextAlgo', data.text_algorithm || 'TF-IDF + SVD Autoencoder');
+        setIfEl('summContam', data.contamination !== undefined ? data.contamination : '0.1');
+        if (data.execution_seconds !== undefined) setIfEl('summTime', data.execution_seconds + 's');
+    }
+
+    // ── ② Scatter: anomaly score per record ───────────────────────────────────
+    function renderScatter(data) {
+        const scatter = data.score_scatter;
+        if (!scatter || !scatter.x.length) return;
+        const norX = [], norY = [], anX = [], anY = [];
+        scatter.x.forEach((xi, i) => {
+            if (scatter.is_anomaly[i]) { anX.push(xi); anY.push(scatter.y[i]); }
+            else { norX.push(xi); norY.push(scatter.y[i]); }
+        });
+        const traces = [
+            {
+                x: norX, y: norY, mode: 'markers', name: 'Normal', hovertemplate: 'Record #%{x}<br>Score: %{y:.3f}<extra>Normal</extra>',
+                marker: { color: '#10b981', size: 6, opacity: 0.75, line: { color: '#065f46', width: 0.5 } }
+            },
+            {
+                x: anX, y: anY, mode: 'markers', name: 'Anomaly', hovertemplate: 'Record #%{x}<br>Score: %{y:.3f}<extra>⚠ Anomaly</extra>',
+                marker: { color: '#ef4444', size: 9, opacity: 0.95, symbol: 'diamond', line: { color: '#7f1d1d', width: 0.5 } }
+            },
+        ];
+        Plotly.newPlot('chartScatter', traces, {
+            ...BASE_LAYOUT,
+            margin: { t: 30, b: 55, l: 65, r: 20 },
+            xaxis: { ...AXIS_STYLE, title: { text: 'Record Index (row number)', font: { color: '#94a3b8', size: 12 } }, showgrid: true, zeroline: false },
+            yaxis: { ...AXIS_STYLE, title: { text: 'Anomaly Score (0 = normal, 1 = severe)', font: { color: '#94a3b8', size: 12 } }, showgrid: true, range: [-0.05, 1.05], dtick: 0.25 },
+            shapes: [{
+                type: 'line', x0: 0, x1: scatter.x.length, y0: THRESHOLD, y1: THRESHOLD,
+                line: { color: '#f59e0b', dash: 'dash', width: 1.5 }
+            }],
+            annotations: [{
+                x: 0, y: THRESHOLD + 0.04, xref: 'x', yref: 'y',
+                text: `Threshold (${THRESHOLD})`, showarrow: false,
+                font: { color: '#f59e0b', size: 10 }, xanchor: 'left'
+            }],
+            // Legend inside top-right to avoid overlapping x-axis label
+            legend: { ...BASE_LAYOUT.legend, x: 0.99, xanchor: 'right', y: 0.99, yanchor: 'top' }
+        }, CFG);
+    }
+
+    // ── ③ Pie: Normal vs Anomaly ──────────────────────────────────────────────
+    function renderPie(data) {
+        Plotly.newPlot('chartPie', [{
+            values: [data.normal_count, data.anomaly_count],
+            labels: ['Normal', 'Anomaly'],
+            type: 'pie', hole: 0.55,
+            marker: { colors: ['#10b981', '#ef4444'], line: { color: '#070b14', width: 2 } },
+            textinfo: 'label+percent',
+            hovertemplate: '%{label}: %{value} records (%{percent})<extra></extra>',
+            textfont: { color: '#e2e8f0', size: 12 },
+            pull: [0, 0.04],
+        }], {
+            ...BASE_LAYOUT,
+            margin: { t: 20, b: 20, l: 10, r: 10 },
+            showlegend: true,
+            legend: { ...BASE_LAYOUT.legend, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 },
+            annotations: [{
+                text: `<b>${data.anomaly_rate}%</b><br>anomalous`,
+                x: 0.5, y: 0.5, xref: 'paper', yref: 'paper',
+                showarrow: false, font: { color: '#e2e8f0', size: 14 }, align: 'center'
+            }]
+        }, CFG);
+    }
+
+    // ── ④ Histogram: score distribution ──────────────────────────────────────
+    function renderHistogram(data) {
+        const hist = data.score_histogram;
+        if (!hist) return;
+        // Color bars red if mid-point >= threshold, blue otherwise
+        const colors = hist.labels.map(lbl => {
+            const mid = (parseFloat(lbl.split('-')[0]) + parseFloat(lbl.split('-')[1])) / 2;
+            return mid >= THRESHOLD ? '#ef4444' : '#3b82f6';
+        });
+        Plotly.newPlot('chartHist', [{
+            x: hist.labels, y: hist.values, type: 'bar', name: 'Records',
+            hovertemplate: 'Score range: %{x}<br>Count: %{y} records<extra></extra>',
+            marker: { color: colors, opacity: 0.85, line: { color: '#070b14', width: 1 } }
+        }], {
+            ...BASE_LAYOUT,
+            margin: { t: 30, b: 75, l: 60, r: 20 },
+            xaxis: { ...AXIS_STYLE, title: { text: 'Anomaly Score Range', font: { color: '#94a3b8', size: 12 } }, tickangle: -35, showgrid: false },
+            yaxis: { ...AXIS_STYLE, title: { text: 'Number of Records', font: { color: '#94a3b8', size: 12 } }, showgrid: true, zeroline: false },
+            shapes: [{
+                type: 'line', x0: -0.5, x1: hist.labels.length - 0.5, y0: 0, y1: 0,
+                line: { color: '#1f2d40', width: 1 }
+            }],
+            bargap: 0.05,
+        }, CFG);
+    }
+
+    // ── ⑤ Feature Contribution Bar ────────────────────────────────────────────
+
+    function renderBar(data) {
+        const cols = data.col_anomaly_scores;
+        if (!cols || Object.keys(cols).length === 0) {
+            document.getElementById('chartBar').innerHTML = '<div class="empty-chart">No numerical columns detected in this dataset.</div>';
+            return;
+        }
+        // Sort by absolute mean-difference (most impactful feature first), cap at 10
+        const entries = Object.entries(cols)
+            .map(([col, v]) => ({ col, diff: Math.abs(v.anomaly_mean - v.normal_mean), ...v }))
+            .sort((a, b) => b.diff - a.diff)
+            .slice(0, 10);
+
+        const labels = entries.map(e => e.col);
+        const anMeans = entries.map(e => typeof e.anomaly_mean === 'number' ? e.anomaly_mean : 0);
+        const norMeans = entries.map(e => typeof e.normal_mean === 'number' ? e.normal_mean : 0);
+
+
+        Plotly.newPlot('chartBar', [
+            {
+                x: labels, y: anMeans, name: 'Anomalous (mean)',
+                type: 'bar', marker: { color: '#ef4444', opacity: 0.88, line: { color: '#7f1d1d', width: 0.5 } },
+                hovertemplate: '<b>%{x}</b><br>Anomaly mean: %{y:,.4g}<extra>Anomalous</extra>'
+            },
+            {
+                x: labels, y: norMeans, name: 'Normal (mean)',
+                type: 'bar', marker: { color: '#3b82f6', opacity: 0.88, line: { color: '#1e3a5f', width: 0.5 } },
+                hovertemplate: '<b>%{x}</b><br>Normal mean: %{y:,.4g}<extra>Normal</extra>'
+            },
+        ], {
+            ...BASE_LAYOUT,
+            barmode: 'group',
+            bargap: 0.25,
+            bargroupgap: 0.05,
+            margin: { t: 30, b: 90, l: 65, r: 20 },
+            xaxis: { ...AXIS_STYLE, title: { text: 'Feature / Column', font: { color: '#94a3b8', size: 12 } }, tickangle: -35, showgrid: false },
+            yaxis: { ...AXIS_STYLE, title: { text: 'Mean Feature Value', font: { color: '#94a3b8', size: 12 } }, showgrid: true, zeroline: true, zerolinecolor: '#334155', zerolinewidth: 1 },
+            legend: { ...BASE_LAYOUT.legend, orientation: 'h', x: 0.5, xanchor: 'center', y: -0.32 },
+        }, CFG);
+    }
+
+    // ── ⑥ Correlation Heatmap ────────────────────────────────────────────────
+    function renderHeatmap(data) {
+        const corr = data.corr_matrix;
+        if (!corr || !corr.columns || corr.columns.length < 2) {
+            document.getElementById('heatmapCard').style.display = 'none';
+            return;
+        }
+        Plotly.newPlot('chartHeatmap', [{
+            z: corr.values, x: corr.columns, y: corr.columns, type: 'heatmap',
+            colorscale: [[0, '#ef4444'], [0.25, '#7f1d1d'], [0.5, '#1e293b'], [0.75, '#1e3a5f'], [1, '#3b82f6']],
+            zmin: -1, zmax: 1, showscale: true,
+            colorbar: { title: 'Correlation', titlefont: { color: '#64748b', size: 11 }, tickfont: { color: '#64748b', size: 10 }, outlinecolor: '#1f2d40', bgcolor: 'rgba(0,0,0,0)' },
+            hovertemplate: '%{x} × %{y}<br>Correlation: %{z:.3f}<extra></extra>',
+            text: corr.values.map(row => row.map(v => v.toFixed(2))),
+            texttemplate: '%{text}',
+            textfont: { size: 10, color: '#cbd5e1' }
+        }], {
+            ...BASE_LAYOUT,
+            margin: { t: 20, b: 90, l: 90, r: 30 },
+            xaxis: { ...AXIS_STYLE, tickangle: -40, showgrid: false },
+            yaxis: { ...AXIS_STYLE, autorange: 'reversed', showgrid: false },
+        }, CFG);
+    }
+
+    // ── ⑦ Time-series ────────────────────────────────────────────────────────
+    function renderTimeseries(data) {
+        const ts = data.time_series;
+        if (!ts) { document.getElementById('timeseriesCard').style.display = 'none'; return; }
+        document.getElementById('timeseriesCard').style.display = '';
+        Plotly.newPlot('chartTimeseries', [
+            {
+                x: ts.dates, y: ts.scores,
+                type: 'scatter', mode: 'lines+markers', name: 'Anomaly Score',
+                line: { color: '#3b82f6', width: 2, shape: 'spline' },
+                marker: {
+                    color: ts.is_anomaly.map(a => a ? '#ef4444' : '#3b82f6'), size: ts.is_anomaly.map(a => a ? 8 : 5),
+                    symbol: ts.is_anomaly.map(a => a ? 'diamond' : 'circle')
+                },
+                hovertemplate: '%{x}<br>Score: %{y:.3f}<extra></extra>',
+            }
+        ], {
+            ...BASE_LAYOUT,
+            margin: { t: 30, b: 60, l: 65, r: 20 },
+            xaxis: { ...AXIS_STYLE, title: { text: ts.date_col, font: { color: '#94a3b8', size: 12 } }, showgrid: true, tickangle: -30 },
+            yaxis: { ...AXIS_STYLE, title: { text: 'Anomaly Score (0–1)', font: { color: '#94a3b8', size: 12 } }, showgrid: true, range: [-0.05, 1.05], dtick: 0.25 },
+            shapes: [{ type: 'line', x0: ts.dates[0], x1: ts.dates[ts.dates.length - 1], y0: THRESHOLD, y1: THRESHOLD, line: { color: '#f59e0b', dash: 'dash', width: 1.5 } }],
+            annotations: [{ x: ts.dates[0], y: THRESHOLD + 0.04, xref: 'x', yref: 'y', text: `Threshold (${THRESHOLD})`, showarrow: false, font: { color: '#f59e0b', size: 10 }, xanchor: 'left' }]
+        }, CFG);
+    }
+
+    // ── ⑧ Top Anomalous Records Table — proper row-wise rendering ─────────────
+    function renderTopTable(data) {
+        const top = data.top_anomalies;
+        const thead = document.getElementById('topTableHead');
+        const tbody = document.getElementById('topTableBody');
+        const empty = document.getElementById('topTableEmpty');
+
+        if (!top || top.length === 0) {
+            document.getElementById('topAnomalyTable').style.display = 'none';
+            empty.style.display = 'block';
+            return;
+        }
+
+        // Internal/meta columns to exclude from the raw data display
+        const EXCLUDE = new Set(['_row_index', 'num_anomaly_score', 'text_anomaly_score', 'is_anomaly']);
+
+        // Build ordered columns: dataset features first, then score columns
+        const scoreKeys = ['anomaly_score', 'is_anomaly'];
+        const featureKeys = Object.keys(top[0]).filter(k => !k.startsWith('_') && !EXCLUDE.has(k) && !scoreKeys.includes(k));
+        const displayKeys = ['anomaly_score', ...featureKeys]; // score first for quick scanning
+
+        // ── THEAD ────────────────────────────────────────────────────────────────
+        thead.innerHTML = '<tr>' +
+            '<th title="Rank">#</th>' +
+            '<th title="Combined anomaly score (0–1)">Anomaly Score</th>' +
+            featureKeys.map(k => `<th title="${k}">${k}</th>`).join('') +
+            '</tr>';
+
+        // ── TBODY ────────────────────────────────────────────────────────────────
+        const rows = top.map((record, idx) => {
+            const score = typeof record.anomaly_score === 'number' ? record.anomaly_score : 0;
+            const scorePct = (score * 100).toFixed(0);
+            const scoreColor = score >= 0.8 ? '#ef4444' : score >= 0.6 ? '#f97316' : score >= THRESHOLD ? '#f59e0b' : '#10b981';
+
+            const rankCell = `<td><span class="rank-badge">${idx + 1}</span></td>`;
+            const scoreCell = `<td>
+      <div class="score-cell">
+        <div class="score-bar-wrap"><div class="score-bar" style="width:${scorePct}%"></div></div>
+        <span class="score-value" style="color:${scoreColor};font-weight:700;">${score.toFixed(3)}</span>
+      </div>
+    </td>`;
+
+            const featureCells = featureKeys.map(k => {
+                const val = record[k];
+                if (val === null || val === undefined) return '<td style="color:#4b6285;">—</td>';
+                const numVal = typeof val === 'number' ? val : parseFloat(val);
+                if (!isNaN(numVal) && typeof val === 'number') {
+                    return `<td class="num-col">${numVal.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>`;
+                }
+                const strVal = String(val);
+                const display = strVal.length > 40 ? strVal.slice(0, 40) + '…' : strVal;
+                return `<td class="text-col" title="${strVal.replace(/"/g, '&quot;')}">${display}</td>`;
+            }).join('');
+
+            return `<tr>${rankCell}${scoreCell}${featureCells}</tr>`;
+        });
+
+        tbody.innerHTML = rows.join('');
+    }
+</script>
+{% endblock %}

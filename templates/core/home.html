@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Upload Report{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-text">
+        <h1 class="page-title">Anomaly Detection</h1>
+        <p class="page-subtitle">Upload your organizational report to detect anomalies using AI</p>
+    </div>
+</div>
+
+<!-- Upload Section -->
+<div class="upload-section">
+    <div class="upload-card" id="uploadCard">
+        <div class="upload-zone" id="dropZone">
+            <input type="file" id="fileInput" name="file" accept=".csv,.xlsx,.xls,.pdf,.docx" hidden />
+            <div class="upload-icon-wrap">
+                <div class="upload-icon pulse-ring">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40"
+                        height="40">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                </div>
+            </div>
+            <h2 class="upload-heading">Drop your report here</h2>
+            <p class="upload-subtext">or click to browse files</p>
+            <div class="upload-formats">
+                <span class="format-badge">CSV</span>
+                <span class="format-badge">XLSX</span>
+                <span class="format-badge">PDF</span>
+                <span class="format-badge">DOCX</span>
+            </div>
+            <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                Choose File
+            </button>
+        </div>
+
+        <!-- File selected state -->
+        <div class="file-preview" id="filePreview" style="display:none;">
+            <div class="file-info">
+                <div class="file-icon" id="fileTypeIcon"></div>
+                <div class="file-details">
+                    <div class="file-name" id="fileName"></div>
+                    <div class="file-size" id="fileSize"></div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="resetUpload()">✕ Remove</button>
+            </div>
+            <button class="btn btn-primary btn-analyze" id="analyzeBtn" onclick="uploadFile()">
+                <span class="btn-text">Analyze Report</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Upload Progress -->
+        <div class="upload-progress" id="uploadProgress" style="display:none;">
+            <div class="progress-label">Uploading file...</div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Cards -->
+<div class="features-grid">
+    <div class="feature-card">
+        <div class="feature-icon feature-icon--blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+            </svg>
+        </div>
+        <h3>Multi-Format Support</h3>
+        <p>Accepts CSV, Excel, PDF, and Word documents with automatic data extraction.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon feature-icon--purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+        </div>
+        <h3>Isolation Forest ML</h3>
+        <p>Detects numerical outliers using Isolation Forest algorithm on cleaned data.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon feature-icon--cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+        </div>
+        <h3>Text Analysis</h3>
+        <p>SVD-based autoencoder scores textual anomalies from narrative fields.</p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon feature-icon--green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+        </div>
+        <h3>Interactive Dashboard</h3>
+        <p>Rich Plotly charts including scatter, heatmap, histogram, and time-series views.</p>
+    </div>
+</div>
+
+{% if recent_reports %}
+<!-- Recent Reports -->
+<div class="section-card" style="margin-top:2rem;">
+    <div class="section-header">
+        <h2>Recent Reports</h2>
+        <a href="{% url 'reports:history' %}" class="btn btn-ghost btn-sm">View All</a>
+    </div>
+    <div class="recent-table">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Uploaded</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rpt in recent_reports %}
+                <tr>
+                    <td class="truncate">{{ rpt.original_filename }}</td>
+                    <td><span class="format-badge">{{ rpt.file_type|upper }}</span></td>
+                    <td><span class="status-badge status-{{ rpt.status }}">{{ rpt.status }}</span></td>
+                    <td>{{ rpt.uploaded_at|date:"M d, Y H:i" }}</td>
+                    <td>
+                        {% if rpt.status == 'done' %}
+                        <a href="{% url 'reports:result_table' rpt.id %}" class="btn btn-ghost btn-sm">View</a>
+                        {% elif rpt.status == 'processing' or rpt.status == 'pending' %}
+                        <a href="{% url 'core:processing' rpt.id %}" class="btn btn-ghost btn-sm">Track</a>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Error toast -->
+<div class="toast toast-error" id="errorToast" style="display:none;"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const filePreview = document.getElementById('filePreview');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('progressBar');
+    const ALLOWED_EXT = ['.csv', '.xlsx', '.xls', '.pdf', '.docx'];
+
+    // Drag & Drop
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault(); dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    dropZone.addEventListener('click', e => { if (!e.target.closest('button')) fileInput.click(); });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    function handleFile(file) {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!ALLOWED_EXT.includes(ext)) { showError('Unsupported file type: ' + ext); return; }
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = formatBytes(file.size);
+        document.getElementById('fileTypeIcon').textContent = ext.toUpperCase().replace('.', '');
+        document.getElementById('fileTypeIcon').className = 'file-icon file-icon--' + ext.replace('.', '');
+        dropZone.style.display = 'none';
+        filePreview.style.display = 'block';
+        // Store file ref
+        fileInput._selectedFile = file;
+    }
+
+    function resetUpload() {
+        fileInput.value = '';
+        fileInput._selectedFile = null;
+        dropZone.style.display = 'flex';
+        filePreview.style.display = 'none';
+        uploadProgress.style.display = 'none';
+    }
+
+    function uploadFile() {
+        const file = fileInput._selectedFile || fileInput.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+        filePreview.style.display = 'none';
+        uploadProgress.style.display = 'block';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload/');
+
+        xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable) {
+                const pct = (e.loaded / e.total * 100).toFixed(0);
+                progressBar.style.width = pct + '%';
+            }
+        });
+
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+                const res = JSON.parse(xhr.responseText);
+                window.location.href = res.redirect;
+            } else {
+                const res = JSON.parse(xhr.responseText);
+                showError(res.error || 'Upload failed.');
+                resetUpload();
+            }
+        };
+
+        xhr.onerror = () => { showError('Network error during upload.'); resetUpload(); };
+        xhr.send(formData);
+    }
+
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(2) + ' MB';
+    }
+
+    function getCookie(name) {
+        let value = '; ' + document.cookie;
+        let parts = value.split('; ' + name + '=');
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
+    function showError(msg) {
+        const t = document.getElementById('errorToast');
+        t.textContent = msg; t.style.display = 'block';
+        setTimeout(() => { t.style.display = 'none'; }, 5000);
+    }
+</script>
+{% endblock %}
